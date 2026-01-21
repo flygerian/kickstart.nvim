@@ -44,11 +44,30 @@ return {
         dashboard.button('q', '  Quit', ':qa<CR>'),
       }
 
+      local opts = dashboard.opts
+
+      opts.layout = {
+        { type = 'padding', val = vim.fn.max { 2, vim.fn.floor(vim.fn.winheight(0) * 0.2) } },
+        dashboard.section.header,
+        { type = 'padding', val = 5 },
+        dashboard.section.buttons,
+        { type = 'padding', val = 3 },
+        dashboard.section.footer,
+      }
+
+      dashboard.section.header.opts = {
+        position = 'center',
+        hl = 'Type',
+      }
+
       -- Send config to alpha
       alpha.setup(dashboard.opts)
 
       -- Disable folding on alpha buffer
-      vim.cmd [[autocmd FileType alpha setlocal nofoldenable]]
+      vim.cmd [[
+        autocmd FileType alpha setlocal nofoldenable
+        autocmd FileType alpha setlocal nowrap
+      ]]
     end,
   },
 }
