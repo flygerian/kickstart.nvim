@@ -3,5 +3,52 @@
 --
 -- See the kickstart.nvim README for more information
 return {
-  { 'ellisonleao/gruvbox.nvim', priority = 1000, config = true, opts = ... },
+  {
+    'goolord/alpha-nvim',
+    dependencies = { 'nvim-tree/nvim-web-devicons' },
+    config = function()
+      local alpha = require 'alpha'
+      local dashboard = require 'alpha.themes.dashboard'
+
+      -- Function to get project name from current directory
+      local function get_project_name()
+        local cwd = vim.fn.getcwd()
+        local project_name = vim.fn.fnamemodify(cwd, ':t')
+        return project_name
+      end
+
+      -- Function to generate ASCII art from text
+      local function generate_header()
+        local project_name = get_project_name()
+        local handle = io.popen("figlet -f 'ANSI Shadow' '" .. project_name .. "'")
+        local result = handle:read '*a'
+        handle:close()
+
+        local lines = {}
+        for line in result:gmatch '[^\r\n]+' do
+          table.insert(lines, line)
+        end
+
+        return lines
+      end
+
+      dashboard.section.header.val = generate_header()
+
+      -- Set menu
+      dashboard.section.buttons.val = {
+        dashboard.button('f', '  Find file', ':Telescope find_files <CR>'),
+        dashboard.button('e', '  New file', ':ene <BAR> startinsert <CR>'),
+        dashboard.button('r', '  Recent files', ':Telescope oldfiles <CR>'),
+        dashboard.button('g', '  Find text', ':Telescope live_grep <CR>'),
+        dashboard.button('c', '  Config', ':e $MYVIMRC <CR>'),
+        dashboard.button('q', '  Quit', ':qa<CR>'),
+      }
+
+      -- Send config to alpha
+      alpha.setup(dashboard.opts)
+
+      -- Disable folding on alpha buffer
+      vim.cmd [[autocmd FileType alpha setlocal nofoldenable]]
+    end,
+  },
 }
