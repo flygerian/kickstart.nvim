@@ -14,6 +14,8 @@ return {
       local function get_project_name()
         local cwd = vim.fn.getcwd()
         local project_name = vim.fn.fnamemodify(cwd, ':t')
+
+        project_name = project_name:gsub('[_-]', ' ')
         return project_name
       end
 
