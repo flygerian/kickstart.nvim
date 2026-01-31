@@ -38,10 +38,11 @@ return {
 
       -- Set menu
       dashboard.section.buttons.val = {
-        dashboard.button('f', '  Find file', ':Telescope find_files <CR>'),
+        dashboard.button('f', '  Find file', ':lua Snacks.picker.files() <CR>'),
         dashboard.button('e', '  New file', ':ene <BAR> startinsert <CR>'),
-        dashboard.button('r', '  Recent files', ':Telescope oldfiles <CR>'),
-        dashboard.button('g', '  Find text', ':Telescope live_grep <CR>'),
+        dashboard.button('r', '  Recent files', ':lua Snacks.picker.recent() <CR>'),
+        dashboard.button('s', '  Resume', ':lua Snacks.picker.resume() <CR>'),
+        dashboard.button('g', '  Find text', ':lua Snacks.picker.grep() <CR>'),
         dashboard.button('c', '  Config', ':e $MYVIMRC <CR>'),
         dashboard.button('q', '  Quit', ':qa<CR>'),
       }
