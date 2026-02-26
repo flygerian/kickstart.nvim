@@ -508,7 +508,7 @@ return {
     {
       '<c-/>',
       function()
-        Snacks.terminal()
+        Snacks.terminal 'vsplit'
       end,
       desc = 'Toggle Terminal',
     },

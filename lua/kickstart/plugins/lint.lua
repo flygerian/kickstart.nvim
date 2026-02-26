@@ -6,7 +6,6 @@ return {
     config = function()
       local lint = require 'lint'
 
-      lint.linters.clangtidy.cmd = '/opt/homebrew/opt/llvm/bin/clang-tidy'
       lint.linters_by_ft = {
         markdown = { 'markdownlint' },
         javascript = { 'eslint' },
