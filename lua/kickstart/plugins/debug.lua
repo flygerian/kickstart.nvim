@@ -95,6 +95,7 @@ return {
       ensure_installed = {
         -- Update this to ensure that you have the debuggers for the langs you want
         'delve',
+        'codelldb',
       },
     }
 
@@ -135,6 +136,60 @@ return {
     dap.listeners.after.event_initialized['dapui_config'] = dapui.open
     dap.listeners.before.event_terminated['dapui_config'] = dapui.close
     dap.listeners.before.event_exited['dapui_config'] = dapui.close
+
+    dap.adapters.codelldb = dap.adapters.codelldb
+      or {
+        type = 'server',
+        host = 'localhost',
+        port = '${port}',
+        executable = {
+          command = 'codelldb',
+          args = { '--port', '${port}' },
+        },
+      }
+
+    -- ShapesLang --debug builds are native executables with DWARF source
+    -- locations mapped back to .shapes files, so they use the C debugger.
+    --
+    -- Both the c and shapes configurations load the Shapes LLDB formatters
+    -- (dap/shapes_formatters.py in this config) so pointer+length
+    -- containers (shapeslang_AstList, olib_Array, shapes_Tensor, …) render
+    -- as inspectable arrays/strings instead of raw pointers.
+    local factory_root = vim.env.FACTORY_ROOT or vim.fn.expand '~/repos/factory'
+    local shapes_formatters = vim.fs.joinpath(factory_root, 'editors', 'nvim', 'dap', 'shapes_formatters.py')
+    local function shapes_codelldb_launch(name)
+      return {
+        name = name,
+        type = 'codelldb',
+        request = 'launch',
+        program = function()
+          return vim.fn.input('Path to executable: ', vim.fn.getcwd() .. '/', 'file')
+        end,
+        cwd = '${workspaceFolder}',
+        stopOnEntry = false,
+        initCommands = {
+          'command script import ' .. vim.fn.shellescape(shapes_formatters),
+        },
+      }
+    end
+    dap.configurations.c = dap.configurations.c or {}
+    table.insert(dap.configurations.c, shapes_codelldb_launch 'Launch (codelldb, shapes formatters)')
+    dap.configurations.shapes = vim.deepcopy(dap.configurations.c or {})
+
+    -- Odin debug configuration (uses codelldb adapter installed via mason)
+    dap.configurations.odin = {
+      {
+        name = 'Launch',
+        type = 'codelldb',
+        request = 'launch',
+        program = function()
+          return vim.fn.input('Path to executable: ', vim.fn.getcwd() .. '/', 'file')
+        end,
+        cwd = '${workspaceFolder}',
+        stopOnEntry = false,
+        args = {},
+      },
+    }
 
     -- Install golang specific config
     require('dap-go').setup {

@@ -1,3 +1,7 @@
+local function project_root()
+  return Snacks.git.get_root() or vim.fn.getcwd()
+end
+
 return {
   'folke/snacks.nvim',
   priority = 1000,
@@ -15,7 +19,7 @@ return {
     picker = { enabled = true },
     quickfile = { enabled = true },
     scope = { enabled = true },
-    scroll = { enabled = true },
+    scroll = { enabled = false },
     statuscolumn = { enabled = true },
     words = { enabled = true },
     styles = {
@@ -29,7 +33,7 @@ return {
     {
       '<leader><space>',
       function()
-        Snacks.picker.smart()
+        Snacks.picker.smart { cwd = project_root() }
       end,
       desc = 'Smart Find Files',
     },
@@ -43,7 +47,7 @@ return {
     {
       '<leader>/',
       function()
-        Snacks.picker.grep()
+        Snacks.picker.grep { cwd = project_root() }
       end,
       desc = 'Grep',
     },
@@ -86,7 +90,7 @@ return {
     {
       '<leader>ff',
       function()
-        Snacks.picker.files()
+        Snacks.picker.files { cwd = project_root() }
       end,
       desc = 'Find Files',
     },
@@ -208,7 +212,7 @@ return {
     {
       '<leader>sg',
       function()
-        Snacks.picker.grep()
+        Snacks.picker.grep { cwd = project_root() }
       end,
       desc = 'Grep',
     },

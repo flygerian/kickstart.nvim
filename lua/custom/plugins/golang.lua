@@ -1,5 +1,4 @@
 return {
-  -- Go plugin for additional features
   {
     'ray-x/go.nvim',
     dependencies = {
@@ -7,11 +6,11 @@ return {
       'neovim/nvim-lspconfig',
       'nvim-treesitter/nvim-treesitter',
     },
-    config = function()
-      require('go').setup()
-    end,
-    event = { 'CmdlineEnter' },
     ft = { 'go', 'gomod' },
-    build = ':lua require("go.install").update_all_sync()',
+    opts = {
+      -- The main Kickstart config owns gopls and nvim-dap.
+      lsp_cfg = false,
+      dap_debug = false,
+    },
   },
 }

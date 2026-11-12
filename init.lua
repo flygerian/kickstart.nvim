@@ -93,6 +93,9 @@ vim.g.maplocalleader = ' '
 -- Set to true if you have a Nerd Font installed and selected in the terminal
 vim.g.have_nerd_font = true
 
+-- Use OSC 52 for remote/tmux sessions while preferring Wayland locally.
+require('config.remote_clipboard').setup()
+
 -- [[ Setting options ]]
 -- See `:help vim.o`
 -- NOTE: You can change these options as you wish!
@@ -171,6 +174,10 @@ vim.o.tabstop = 2
 vim.o.shiftwidth = 2
 vim.o.expandtab = true
 
+-- use nvim.lue files
+vim.o.exrc = true
+vim.o.secure = true
+
 -- [[ Basic Keymaps ]]
 --  See `:help vim.keymap.set()`
 
@@ -190,6 +197,9 @@ end, { desc = 'Go to next diagnostic' })
 vim.keymap.set('n', '[e', function()
   vim.diagnostic.jump { count = -1 }
 end, { desc = 'Go to previous diagnostic' })
+
+-- Keep the current buffer visible by opening :terminal in a new vertical split.
+vim.cmd [[cnoreabbrev <expr> terminal getcmdtype() ==# ':' && getcmdline() ==# 'terminal' ? 'vertical terminal' : 'terminal']]
 
 -- Exit terminal mode in the builtin terminal with a shortcut that is a bit easier
 -- for people to discover. Otherwise, you normally need to press <C-\><C-n>, which
@@ -241,6 +251,22 @@ vim.api.nvim_create_autocmd('InsertLeave', {
     if require('luasnip').session.current_nodes[vim.api.nvim_get_current_buf()] and not require('luasnip').session.jump_active then
       require('luasnip').unlink_current()
     end
+  end,
+})
+
+-- Register .c3 files
+vim.filetype.add {
+  extension = {
+    c3 = 'c3',
+  },
+}
+
+vim.treesitter.language.register('c3', 'c3')
+
+vim.api.nvim_create_autocmd('FileType', {
+  pattern = 'c3',
+  callback = function(args)
+    pcall(vim.treesitter.start, args.buf, 'c3')
   end,
 })
 
@@ -307,6 +333,22 @@ require('lazy').setup({
         changedelete = { text = '~' },
       },
     },
+  },
+  {
+    dir = vim.fs.joinpath(vim.env.FACTORY_ROOT or vim.fn.expand '~/repos/factory', 'editors', 'nvim'),
+    name = 'shapeslang.nvim',
+    lazy = false,
+    dependencies = { 'nvim-treesitter/nvim-treesitter' },
+  },
+  {
+    dir = vim.fs.joinpath(vim.env.FACTORY_ROOT or vim.fn.expand '~/repos/factory', 'editors', 'pi-nvim', 'nvim'),
+    name = 'pi-nvim',
+    lazy = false,
+  },
+  {
+    dir = vim.fs.joinpath(vim.env.FACTORY_ROOT or vim.fn.expand '~/repos/factory', 'editors', 'codex-nvim', 'nvim'),
+    name = 'codex-nvim',
+    lazy = false,
   },
 
   -- NOTE: Plugins can also be configured to run Lua code when they are loaded.
@@ -732,13 +774,6 @@ require('lazy').setup({
             completeUnimported = true,
             clangdFileStatus = true,
           },
-          setup = {
-            clangd = function(_, opts)
-              local clangd_ext_opts = LazyVim.opts 'clangd_extensions.nvim'
-              require('clangd_extensions').setup(vim.tbl_deep_extend('force', clangd_ext_opts or {}, { server = opts }))
-              return false
-            end,
-          },
         },
         gopls = {
           settings = {
@@ -788,6 +823,12 @@ require('lazy').setup({
         -- But for many setups, the LSP (`ts_ls`) will work just fine
         ts_ls = {},
         --
+        ols = {
+          cmd = { '/home/olabode/ols/ols' },
+          settings = {
+            odin_command = '/home/olabode/Odin/odin',
+          },
+        },
 
         lua_ls = {
           -- cmd = { ... },
@@ -805,39 +846,20 @@ require('lazy').setup({
         },
       }
 
-      -- Ensure the servers and tools above are installed
-      --
-      -- To check the current status of installed tools and/or manually install
-      -- other tools, you can run
-      --    :Mason
-      --
-      -- You can press `g?` for help in this menu.
-      --
-      -- `mason` had to be setup earlier: to configure its options see the
-      -- `dependencies` table for `nvim-lspconfig` above.
-      --
-      -- You can add other tools here that you want Mason to install
-      -- for you, so that they are available from within Neovim.
-      local ensure_installed = vim.tbl_keys(servers or {})
-      vim.list_extend(ensure_installed, {
-        'stylua', -- Used to format Lua code
-      })
-      require('mason-tool-installer').setup { ensure_installed = ensure_installed }
-
+      -- Mason owns only tools that are not already installed and managed on
+      -- this machine. clangd, gopls, and ols use the commands above/PATH.
       require('mason-lspconfig').setup {
-        ensure_installed = {}, -- explicitly set to an empty table (Kickstart populates installs via mason-tool-installer)
-        automatic_installation = false,
-        handlers = {
-          function(server_name)
-            local server = servers[server_name] or {}
-            -- This handles overriding only values explicitly passed
-            -- by the server configuration above. Useful when disabling
-            -- certain features of an LSP (for example, turning off formatting for ts_ls)
-            server.capabilities = vim.tbl_deep_extend('force', {}, capabilities, server.capabilities or {})
-            require('lspconfig')[server_name].setup(server)
-          end,
-        },
+        ensure_installed = { 'lua_ls', 'ts_ls' },
+        automatic_enable = false,
       }
+      require('mason-tool-installer').setup { ensure_installed = { 'stylua' } }
+
+      -- Neovim 0.11+ owns LSP configuration and activation directly.
+      for server_name, server in pairs(servers) do
+        server.capabilities = vim.tbl_deep_extend('force', {}, capabilities, server.capabilities or {})
+        vim.lsp.config(server_name, server)
+        vim.lsp.enable(server_name)
+      end
     end,
   },
 
@@ -858,21 +880,23 @@ require('lazy').setup({
     opts = {
       notify_on_error = false,
       format_on_save = function(bufnr)
-        -- Disable "format_on_save lsp_fallback" for languages that don't
-        -- have a well standardized coding style. You can add additional
-        -- languages here or re-enable it for the disabled ones.
-        local disable_filetypes = { c = true, cpp = true }
-        if disable_filetypes[vim.bo[bufnr].filetype] then
-          return nil
-        else
+        if vim.bo[bufnr].filetype == 'odin' then
           return {
-            timeout_ms = 500,
-            lsp_format = 'fallback',
+            timeout_ms = 1000,
+            lsp_format = 'never',
           }
         end
       end,
+      formatters = {
+        odinfmt = {
+          command = '/home/olabode/ols/odinfmt',
+          args = { '-stdin' },
+          stdin = true,
+        },
+      },
       formatters_by_ft = {
         lua = { 'stylua' },
+        odin = { 'odinfmt' },
         -- Conform can also run multiple formatters sequentially
         -- python = { "isort", "black" },
         --
@@ -982,29 +1006,6 @@ require('lazy').setup({
     },
   },
 
-  { -- You can easily change to a different colorscheme.
-    -- Change the name of the colorscheme plugin below, and then
-    -- change the command in the config to whatever the name of that colorscheme is.
-    --
-    -- If you want to see what colorschemes are already installed, you can use `:Telescope colorscheme`.
-    'ellisonleao/gruvbox.nvim',
-    priority = 1000, -- Make sure to load this before all the other start plugins.
-    config = function()
-      ---@diagnostic disable-next-line: missing-fields
-      -- require('tokyonight').setup {
-      --   styles = {
-      --     comments = { italic = false }, -- Disable italics in comments
-      --   },
-      -- }
-
-      -- Load the colorscheme here.
-      -- Like many other themes, this one has different styles, and you could load
-      -- any other, such as 'tokyonight-storm', 'tokyonight-moon', or 'tokyonight-day'.
-      vim.o.background = 'dark'
-      vim.cmd.colorscheme 'gruvbox'
-    end,
-  },
-
   -- Highlight todo, notes, etc in comments
   { 'folke/todo-comments.nvim', event = 'VimEnter', dependencies = { 'nvim-lua/plenary.nvim' }, opts = { signs = false } },
 
@@ -1047,28 +1048,45 @@ require('lazy').setup({
   },
   { -- Highlight, edit, and navigate code
     'nvim-treesitter/nvim-treesitter',
+    lazy = false,
     build = ':TSUpdate',
-    main = 'nvim-treesitter', -- Sets main module to use for opts
-    -- [[ Configure Treesitter ]] See `:help nvim-treesitter`
-    opts = {
-      ensure_installed = { 'bash', 'c', 'diff', 'html', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc' },
-      -- Autoinstall languages that are not installed
-      auto_install = true,
-      highlight = {
-        enable = true,
-        -- Some languages depend on vim's regex highlighting system (such as Ruby) for indent rules.
-        --  If you are experiencing weird indenting issues, add the language to
-        --  the list of additional_vim_regex_highlighting and disabled languages for indent.
-        additional_vim_regex_highlighting = { 'ruby' },
-      },
-      indent = { enable = true, disable = { 'ruby' } },
-    },
-    -- There are additional nvim-treesitter modules that you can use to interact
-    -- with nvim-treesitter. You should go explore a few and see what interests you:
-    --
-    --    - Incremental selection: Included, see `:help nvim-treesitter-incremental-selection-mod`
-    --    - Show your current context: https://github.com/nvim-treesitter/nvim-treesitter-context
-    --    - Treesitter + textobjects: https://github.com/nvim-treesitter/nvim-treesitter-textobjects
+    branch = 'main',
+    config = function()
+      local treesitter = require 'nvim-treesitter'
+      local parsers = { 'bash', 'c', 'diff', 'html', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc' }
+      treesitter.install(parsers)
+
+      local function attach(buf, language)
+        if not vim.treesitter.language.add(language) then
+          return
+        end
+
+        vim.treesitter.start(buf, language)
+        if vim.treesitter.query.get(language, 'indents') then
+          vim.bo[buf].indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+        end
+      end
+
+      local available = treesitter.get_available()
+      vim.api.nvim_create_autocmd('FileType', {
+        callback = function(args)
+          local language = vim.treesitter.language.get_lang(args.match)
+          if not language then
+            return
+          end
+
+          if vim.tbl_contains(treesitter.get_installed 'parsers', language) then
+            attach(args.buf, language)
+          elseif vim.tbl_contains(available, language) then
+            treesitter.install(language):await(function()
+              attach(args.buf, language)
+            end)
+          else
+            attach(args.buf, language)
+          end
+        end,
+      })
+    end,
   },
 
   -- The following comments only work if you have downloaded the kickstart repo, not just copy pasted the
@@ -1083,7 +1101,7 @@ require('lazy').setup({
   require 'kickstart.plugins.debug',
   -- require 'kickstart.plugins.indent_line',
   require 'kickstart.plugins.lint',
-  -- require 'kickstart.plugins.autopairs',
+  require 'kickstart.plugins.autopairs',
   require 'kickstart.plugins.neo-tree',
   require 'kickstart.plugins.gitsigns', -- adds gitsigns recommend keymaps
 
@@ -1091,7 +1109,12 @@ require('lazy').setup({
   --    This is the easiest way to modularize your config.
   --
   --  Uncomment the following line and add your plugins to `lua/custom/plugins/*.lua` to get going.
+  -- Omarchy keeps its generated theme spec in lua/plugins/theme.lua. Import it
+  -- before custom plugins so the Kickstart adapter can disable its LazyVim entry.
+  { import = 'plugins' },
   { import = 'custom.plugins' },
+  { 'LazyVim/LazyVim', enabled = false },
+  require 'kickstart.plugins.theme',
   --
   -- For additional information with loading, sourcing and examples see `:help lazy.nvim-🔌-plugin-spec`
   -- Or use telescope!

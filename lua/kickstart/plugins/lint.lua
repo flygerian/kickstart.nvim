@@ -6,12 +6,16 @@ return {
     config = function()
       local lint = require 'lint'
 
+      local function when_available(command, linter)
+        return vim.fn.executable(command) == 1 and { linter } or nil
+      end
+
       lint.linters_by_ft = {
-        markdown = { 'markdownlint' },
-        javascript = { 'eslint' },
-        typescript = { 'eslint' },
-        cpp = { 'clangtidy' },
-        c = { 'clangtidy' },
+        markdown = when_available('markdownlint', 'markdownlint'),
+        javascript = when_available('eslint', 'eslint'),
+        typescript = when_available('eslint', 'eslint'),
+        cpp = when_available('clang-tidy', 'clangtidy'),
+        c = when_available('clang-tidy', 'clangtidy'),
       }
 
       -- To allow other plugins to add linters to require('lint').linters_by_ft,
